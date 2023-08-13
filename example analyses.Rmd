@@ -5,21 +5,145 @@ date: "August 13, 2023"
 output: html_document
 ---
 
-Welcome to a basic tutorial on conducting (and plotting) multivariate morphometric analyses in R. Let's get started by loading in the packages we need:
+Welcome to a basic tutorial on conducting (and plotting) multivariate morphometric analyses in R. Let's get started by loading the packages we need:
 
 ```{r}
 #load required packages
-library(dplyr)
 library(ggplot2)
 library(ggfortify)
 library(MASS)
+library(dplyr)
+library(tidyr)
 ```
 
-Next, let's load in our data. For this tutorial we'll be working with craniomandibular measurements from the Pen-tailed Treeshrew, *Ptilocercus lowii*. These data were previously published in Juman et al. 2021 (https://doi.org/10.1007/s10914-021-09556-7) and we will be recreating some of the analyses and plots from this study.
+Next, let's load in our data. For this tutorial we'll be working with craniomandibular measurements from the Pen-tailed Treeshrew, *Ptilocercus lowii*. These data were previously published in Juman et al. 2021 (https://doi.org/10.1007/s10914-021-09556-7).
 
 ```{r}
-#load in the supplementary data file from the paper, calling the correct sheet
-anathana <- readxl::read_excel("Anathana supp data.xlsx",sheet="Anathana Data")
+#load in the supplementary data file from the paper, calling the correct sheet ("Skull Raw")
+data <- readxl::read_excel("Juman et al. 2021 Ptilo supplementary data.xlsx",sheet="Skull Raw")
 
+#columns 8 through 25 are the measurements. let's go ahead and (natural) log all of these measurements. i like to do this at the beginning so that i don't forget to do it later. this isn't always necessary, but it's good practice.
+data[,8:25] <- log(data[,8:25])
+```
+
+###Sexual Dimorphism
+
+For any analyses that involve size, you might want to check whether there is significant sexual size dimorphism in your sample. There are a few ways to do this, but the simplest one is to run a univariate t-test on a measurement that makes sense; in this case, CPL (condylopremaxillary length) is appropriate, as it is basically a measure of skull length (/size).
+
+```{r}
+#you can replace CPL with any variable here
+t.test(CPL ~ Sex, data = data)
+```
+
+It looks like the means in the male and female samples are very similar, and the p=value is >> 0.05, so we can assume that skull length doesn't differ significantly between males and females. You can also check this with the multivariate methods demonstrated below (PCA color-coded by sex or DFA grouped by sex). If you found significant sexual size dimorphism, you might want to run subsequent analyses separated by sex.
+
+Moving on!
+
+###Dealing with missing data
+
+A morphometric dataset is likely to have a pretty substantial amount of missing data (damaged specimens, etc). But the multivariate methods described below can't handle missing data. This is a problem! But there are a few ways we can deal with it. The first is to impute measurements based on the other data (see Clavel et al. 2014, https://doi.org/10.1093/sysbio/syt100 for imputation functions). This makes sense for certain kinds of studies (i.e. Juman et al. 2022, imputation code here: https://github.com/mayajuman/belangeri) more than others. For taxonomy-focused morphometrics, it's probably best to avoid imputation. The other option is to remove variables/individuals strategically, to produce a smaller but complete dataset that hopefully optimizes any subsets that we are most interested in studying. 
+
+Let's start by checking how much missing data we have:
+
+```{r}
+#calculate percentage of NAs in relevant columns
+sum(is.na(data[,8:25]))/prod(dim(data[,8:25]))*100
+```
+
+It looks like ~6% of our measurements are missing, which isn't terrible. Let's see if we can cut some of these missing measurements out, while maximizing our sample size as much as possible. For PCA and DFA, we want ideally around 8 variables (more if possible, but no fewer than 6 or 7). 
+
+First let's make some easy cuts: are any of our measurements missing for lots of specimens? Let's get rid of a few that look problematic.
+
+```{r}
+colSums(is.na(data[,8:25])) 
+
+#CIL, ZB, LCH are missing for 6 individuals apiece. let's dump them
+x <- data %>% select(-CIL, -ZB, -LCH) 
+
+#notice that i am saving this to a new object here^, so as to preserve the original dataframe in case i want to go back and use the measurements that i am eliminating now. this process usually involves some trial and error, so creating new objects ensures that you don't overwrite the original data in case you need to go back
+```
+
+Exactly which variables you retain will depend on which parts of your sample you are trying to optimize, so your next step depends on your dataset/focus. For *Ptilocercus*, we have an uneven subspecies sample, 37 *P. l. continentis* and only 8 *P. l. lowii*:
+
+```{r}
+table(x$Subspecies)
+```
+
+This means that we really don't want to lose any of those 8. So let's cut any measurements that are missing *within the lowii sample*:
+
+```{r}
+colSums(is.na(x[which(x$Subspecies == "lowii"),])) #CPL, MB, CNL, PBPL, MCW have NAs
+x <- x %>% select(-CPL, -MB, -CNL, -PBPL, -MCW) 
+
+colSums(is.na(x[which(x$Subspecies == "lowii"),])) #check to make sure we have a complete sample for these 8 -- success!
+```
+
+We know we're going to lose some *P. l. continentis* individuals, but we can also afford to cut another couple variables. This requires some careful finetuning:
+
+```{r}
+apply(X = is.na(x[,8:17]), MARGIN = 1, FUN = sum) #a few specimens are missing several measurements
+
+#drop any problematic specimens that are missing more than 3 measurements -- we're going to lose these anyway so let's drop to see which variables should make the final cut
+x <- x[rowSums(is.na(x[,8:17])) <= 2,]
+
+colSums(is.na(x[,8:17])) #LPL is missing 2, so let's get rid of it. then we can pick any additional variable to remove, so we end up with 8. there is no right answer here, but i'm going to get rid of LTL, because MCIL is already capturing mandible length.
+
+#remove LPL and LTL, and drop the two rows that are missing values for BB, PPL respectively
+x <- x %>% select(-LPL, -LTL) %>% drop_na(BB, PPL)
+```
+
+We now have a complete sample of 8 measurements for 40 specimens. We only lost 5 individuals, and from the subset (*P. l. continentis*) that is better represented in our dataset anyway. We're ready for multivariate analyses!
+
+Note: for a small dataset like this one, I would recommend going through it manually like we just did, which allows you to finetune and optimize any smaller samples within your dataset (i.e. subspecies, sex, localities, etc -- any groups you particularly care about and don't want to lose any individuals from). For larger datasets, this will be inefficient. Below are some lines of code that might help you more quickly cut down large samples to eliminate missing data:
+
+```{r}
+#the following line removes any columns that have n or or more NAs (so replace n with whatever you see as a maximum acceptable number of lost individuals for your dataset)
+
+#data <- data[,colSums(is.na(data)) < n]
+
+#below is a crude function that will produce a pared down dataset with the most complete observations for the groups you specify ("a" and "b" are the names of the groups you want to include in your final dataset; see below for example). it will also tell you how many individuals you lost in the process, and what the most complete sample size can be for the specified # of variables you want
+
+#note that it cannot be used to prioritize certain groups; that will have to be done manually (or with a more sophisticated function...)
+
+optimize <- function(data, name, a, b) {
+  a <- deparse(substitute(a))
+  b <- deparse(substitute(b))
+  data <- data[which(data$Subspecies == a | data$Subspecies == b),] #replace with the groups you want to focus on
+  early <- data
+  data2 <- data[,8:25] #subset of data frame with measurement data
+  data2 <- data2[rowSums(is.na(data2)) < 13,] #maximum # of NAs to make hard cuts
+  collist = combn(ncol(data2), 8) #can be changed to fewer variables if a higher sample size is needed
+  numobs = apply(collist, 2, function(x) nrow(na.omit(data2[, x])))
+  cat("for subset size", 8, "most complete obs is", max(numobs), "\n")
+  best.list = list()
+  best = which(numobs == max(numobs))[1]
+  best.list = c(best.list, list(collist[, best]))
+  data <- data[,c(1:7,(best.list[[1]]+7),26:31)] %>% drop_na(8:15) #vectors here depend on dataset structure
+  name <- deparse(substitute(name))  
+  assign(name,data,envir = .GlobalEnv)
+  cat((length(early$Subspecies) - length(data$Subspecies)), "individuals lost", "\n")
+}
+
+#optimize(data, data2, continentis, lowii)
+```
+
+###Principal Component Analysis (PCA)
+
+Principal component analysis (PCA) is a data reduction method that is used to consolidate large amounts in information in multivariate datasets by distilling these data into only a few dimensions ("principal components", or PCs). In our case, we want to take the 8 complete measurements in our pared-down dataset, which include length, width, and height variables, and transform them into PCs that capture size/shape so that we can visualize variation between individuals along these axes (plotted in "morphospace"). There are several packages that you can use to do this, but let's start simple here:
+
+```{r}
+#run the PCA
+pca <- princomp(x[,8:15], cor=TRUE)
+
+for (i in 1:8) {
+  pca$loadings[,i] <- (pca$loadings[,i] * pca$sdev[i])
+}
+
+print(summary(pca),digits=2) #importance of components
+print(pca[["loadings"]], cutoff=0) #loadings
+round(pca$sdev^2,2) #eigenvalues (i.e. squared standard dv)
+
+
+autoplot(pc11, x = 1, y = 2, data = ovs, colour = 'island', shape = 'Sex', label = FALSE, size = 2.5, label.size = 3, frame=TRUE) + ggtitle("Overall PCA by island, skull")
 ```
 
