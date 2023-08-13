@@ -61,6 +61,8 @@ colSums(is.na(data[,8:25]))
 x <- data %>% select(-CIL, -ZB, -LCH) 
 
 #notice that i am saving this to a new object here^, so as to preserve the original dataframe in case i want to go back and use the measurements that i am eliminating now. this process usually involves some trial and error, so creating new objects ensures that you don't overwrite the original data in case you need to go back
+
+#you also may want to use slightly different combinations of variables/individuals for different analyses, based on what you are trying to optimize for.
 ```
 
 Exactly which variables you retain will depend on which parts of your sample you are trying to optimize, so your next step depends on your dataset/focus. For *Ptilocercus*, we have an uneven subspecies sample, 37 *P. l. continentis* and only 8 *P. l. lowii*:
@@ -92,7 +94,7 @@ colSums(is.na(x[,8:17])) #LPL is missing 2, so let's get rid of it. then we can 
 x <- x %>% select(-LPL, -LTL) %>% drop_na(BB, PPL)
 ```
 
-We now have a complete sample of 8 measurements for 40 specimens. We only lost 5 individuals, and from the subset (*P. l. continentis*) that is better represented in our dataset anyway. We're ready for multivariate analyses!
+We now have a complete sample of eight measurements for 40 specimens. We only lost five individuals, and from the subset (*P. l. continentis*) that is better represented in our dataset anyway. We're ready for multivariate analyses!
 
 Note: for a small dataset like this one, I would recommend going through it manually like we just did, which allows you to finetune and optimize any smaller samples within your dataset (i.e. subspecies, sex, localities, etc -- any groups you particularly care about and don't want to lose any individuals from). For larger datasets, this will be inefficient. Below are some lines of code that might help you more quickly cut down large samples to eliminate missing data:
 
@@ -135,15 +137,142 @@ Principal component analysis (PCA) is a data reduction method that is used to co
 #run the PCA
 pca <- princomp(x[,8:15], cor=TRUE)
 
+#note: before we look at loadings, we need to adjust them. this is because princomp() defines loadings as raw eigenvectors. what we are after is loadings that represent correlation coefficients between variables and principal components. to convert them, we multiply the raw eigenvectors by the standard deviation (i do this below with a for loop for each component -- there are 8, because we have 8 variables)
 for (i in 1:8) {
   pca$loadings[,i] <- (pca$loadings[,i] * pca$sdev[i])
 }
 
+#we are now ready to look at output:
 print(summary(pca),digits=2) #importance of components
 print(pca[["loadings"]], cutoff=0) #loadings
 round(pca$sdev^2,2) #eigenvalues (i.e. squared standard dv)
-
-
-autoplot(pc11, x = 1, y = 2, data = ovs, colour = 'island', shape = 'Sex', label = FALSE, size = 2.5, label.size = 3, frame=TRUE) + ggtitle("Overall PCA by island, skull")
 ```
 
+What have we learned so far? The "proportion of variance" tells us that the first component (PC1) represents 51.7% of the variance in our sample, while PC2 represents 18%. So a bivariate plot of these two PCs would capture almost 70% of the variance in our sample: not bad. Additional components represent smaller proportions of variance. The loadings for each component are also revealing. 
+
+For PC1, the most heavily weighted components are UTL, MCIL, MTL, and PPL -- all length variables. That suggests that PC1, which accounts for over half the variance, is likely representing skull length. PC2 has a high positive loading for BB (braincase breadth) and relatively high negative loadings for MH and MCH, both of which represent mandibular height. This suggest that PC2 is a shape variable capturing a contrast between cranium width and mandible height. The PCA has compressed information from eight variables into a few simpler axes.
+
+Each individual has been assigned "scores" for each principal component, which can be used to plot and understand variation among individuals. Let's quickly visualize the PC scores with a readymade function from ggfortify(), an extension to the ggplot2() package. We can label our points in a variety of ways depending on what we are interested in looking at.
+
+```{r}
+#where does princomp() store the PC scores? you can find them here:
+pca$scores[,1]
+pca$scores[,2]
+
+#but for now, let's plot these in a very simple way with an existing function. you can plot any of the PCs by changing the x and y values, but usually you are interested in plotting PC1, PC2, and occasionally PC3.
+
+#let's try this in a few different ways:
+
+autoplot(pca, x = 1, y = 2, data = x, colour = 'Subspecies', label = FALSE, size = 2.5, label.size = 3, frame=TRUE) + ggtitle("PCA by Subspecies")
+
+#include a shape variable as well
+autoplot(pca, x = 1, y = 2, data = x, colour = 'Subspecies', shape = 'Sex', label = FALSE, size = 2.5, label.size = 3, frame=TRUE) + ggtitle("PCA by Subspecies")
+
+autoplot(pca, x = 1, y = 2, data = x, colour = 'Region', label = FALSE, size = 2.5, label.size = 3, frame=TRUE) + ggtitle("PCA by Region")
+
+autoplot(pca, x = 1, y = 2, data = x, colour = 'Sex', label = FALSE, size = 2.5, label.size = 3, frame=TRUE) + ggtitle("PCA by Subspecies")
+```
+
+What can we conclude from these plots? There is a lot of overlap between subspecies, though some separation along PC2. To interpret that, we refer back to the loadings. It seems like *P. l. lowii* has lower scores on PC2 relative to *P. l. continentis*, suggesting that its braincase may be less wide relative to its mandibular height. You may or may not be able to interpret much from the loadings in terms of functional anatomy, but the PCA allows us to examine variation in our sample, which is the main goal. There does seem to be some separation along PC2 between mainland and Mentawai island specimens, though this sample is quite small. And finally, the overlap in the PCA by sex confirms the apparent lack of sexual size dimorphism in our dataset.
+
+###Linear regression using PC1
+
+There are also other things you can do with PC scores other than bivariate plots. You can extract one of the PCs and treat it as a response variable in a different analysis; for example, treating PC1 as a body size proxy in a linear regression (see Sargis et al. 2018 on *Tupaia glis* or Juman et al. 2022 on *Tupaia belangeri* as examples). Briefly, here is how you would do that (though for this kind of modeling, you want a much more robust sample size than what we have here):
+
+```{r}
+x$pc1 <- pca$scores[,1] #save PC1 scores to your data frame. now each individual has an associated PC1 score, which in this case seems to be some sort of proxy for skull length
+x$pc2 <- pca$scores[,2] #(let's also save PC2 for future plotting)
+
+#here is a summary of a simple linear regression, where we are trying to predict PC1 (skull size) using Latitude and Sex
+summary(lm(pc1 ~ Latitude*Sex, data = x))
+
+#all p-values are well over 0.05, suggesting that neither latitude nor sex is a significant predictor of skull size. there doesn't seem to be a pattern of sexual size dimorphism OR a latitudinal size gradient (Bergmann's rule) in this sample.
+
+#of course, you can also plot PC1 vs. any other variable. like latitude, for example:
+plot(x$pc1 ~ x$Latitude)
+title(main = "PC1 vs. Latitude")
+```
+
+###Discriminant function analysis
+
+Unlike PCA, which is more conservative, Discriminant Function Analysis (DFA) is another multivariate approach that is actively trying to classify groups in your sample. DFA will essentially try to accurately sort your sample into the correct categories based on the data you provide (for e.g., subspecies, islands, sexes). The higher the correct classification rate, the more distinct these groups are based on the data you have. You can also use DFA to try to predict the classification of "unknowns" in your sample. 
+
+Let's dive in:
+
+```{r}
+#let's start with a simple two-group DFA: continentis vs. lowii
+
+dfa <- lda(x[,c(8:15)],grouping=x$Subspecies, CV = FALSE)
+ctraw <- table(x$Subspecies, predict(dfa)$class)
+ctraw #rows are actual count and columns are predicted count
+
+#total percent correct
+round(sum(diag(prop.table(ctraw))),4)*100
+```
+
+The rows in this table represent the actual groups, and the columns are the groups that the DFA sorted the individuals into. The overall correct classification rate was 90% -- pretty high! Remember that these are the same groups that the PCA showed as largely overlapping. The DFA, which is *trying* to split them, suggests that they are more distinct than the PCA showed.
+
+Now let's try a jackknife procedure (i.e. leave-one-out cross validation) on a second DFA and see if this classification rate stays high. This is a good way to see how robust your result is, and I tend to report the cross-validated DFA:
+
+```{r}
+dfa2 <- lda(x[,c(8:15)],grouping=x$Subspecies, CV = TRUE)
+ctraw2 <- table(x$Subspecies, dfa2$class)
+ctraw2 #rows are actual count and columns are predicted count
+
+# total percent correct
+round(sum(diag(prop.table(ctraw2))),4)*100
+```
+
+87.5%! That's still pretty good. 
+
+One note about DFAs: in theory, you want the sample size of your smallest group (in this case *P. l. lowii*, n = 8) to be > than the number of predictor variables (in this case, also eight). Sometimes there is nothing you can do about this when your samples are tiny, but it's worth keeping in mind. We should technically have seven or fewer predictor variables here. (I'm just too lazy to cut one for this tutorial.)
+
+Another thing you can do with a DFA is predict the classification of "unknowns". In our case, we can use this method to predict whether our island specimens (under the column "Region") are classified as belonging to the Malay Peninsula or Borneo, the two "mainlands" in our sample.
+
+```{r}
+#the first thing you need to do is divide your dataset into the training set (known groups) and the test set (the unknowns that you want to predict)
+
+#here i'm creating the training set, either by selecting the known groups OR removing the unknowns (either line works)
+x2 <- x[which(x$Region == "Borneo" | x$Region == "Malay Peninsula"),]
+
+#here i'm creating the test set by selecting the unknowns
+u <- x[-which(x$Region == "Borneo" | x$Region == "Malay Peninsula"),]
+
+#DFA (WITHOUT CROSS VALIDATION)
+
+#create linear discriminant model
+lin <- lda(x2[,8:15],grouping=x2$Region, CV=FALSE)
+#to check coefficients of variables, use:
+lin
+
+#create table to view classification rate
+ctraw3 <- table(x2$Region, predict(lin)$class)
+ctraw3 #rows are actual count and columns are predicted count
+
+# total percent correct
+round(sum(diag(prop.table(ctraw3))),4)*100
+
+#PREDICTIONS
+
+#use predict function on test set: output will be list of classifications
+predict(lin, u[,8:15])$class
+#all three island specimens were classified as Malay Peninsula
+
+#NOTE: you cannot predict using a cross-validated model
+#however, you can cross-validate the prediction itself (with the not-cross validated model), like below:
+predict(lin, CV=TRUE, u[,8:15])$class
+#still Malay Peninsula for all three
+```
+
+Our linear discriminant model predicts that all three "unknown" island specimens belong to the Malay Peninsula group, suggesting that these individuals resemble the MP sample more than the Bornean sample. This corroborates our PCA above, which shows the island specimens as closer to the MP polygon rather than the Bornean one.
+
+DFA scores can be extracted and plotted just like PCA scores. However, the number of discriminant functions (LDs here, the equivalent of PCs in a PCA) is equal to (# groups - 1), so if you are discriminating between two groups like we are here (Borneo and Malay Peninsula), you'll only have one set of LD scores (a one dimensional plot). With three groups, you could make a bivariate plot of LD1 and LD2 that would resemble a PCA. Here is how to extract LD scores:
+
+```{r}
+#extracting scores from our first DFA
+lda.values <- predict(dfa)
+x$ld1 <- lda.values$x
+```
+
+
+###Plotting PCA and DFA
