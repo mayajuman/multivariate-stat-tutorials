@@ -1,0 +1,25 @@
+---
+title: "Basic PCA and DFA in R"
+author: "Maya Juman"
+date: "August 13, 2023"
+output: html_document
+---
+
+Welcome to a basic tutorial on conducting (and plotting) multivariate morphometric analyses in R. Let's get started by loading in the packages we need:
+
+```{r}
+#load required packages
+library(dplyr)
+library(ggplot2)
+library(ggfortify)
+library(MASS)
+```
+
+Next, let's load in our data. For this tutorial we'll be working with craniomandibular measurements from the Pen-tailed Treeshrew, *Ptilocercus lowii*. These data were previously published in Juman et al. 2021 (https://doi.org/10.1007/s10914-021-09556-7) and we will be recreating some of the analyses and plots from this study.
+
+```{r}
+#load in the supplementary data file from the paper, calling the correct sheet
+anathana <- readxl::read_excel("Anathana supp data.xlsx",sheet="Anathana Data")
+
+```
+
