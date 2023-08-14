@@ -11,6 +11,7 @@ Welcome to a basic tutorial on conducting (and plotting) multivariate morphometr
 #load required packages
 library(ggplot2)
 library(ggfortify)
+library(gridExtra)
 library(MASS)
 library(dplyr)
 library(tidyr)
@@ -274,5 +275,112 @@ lda.values <- predict(dfa)
 x$ld1 <- lda.values$x
 ```
 
-
 ###Plotting PCA and DFA
+
+We've gone over how to make relatively simple plots with built-in functions, but you might eventually want to create a publication-ready plot and have more control over the graphics. I'd recommend building the plot in layers with ggplot, which is highly customizable relative to base R plotting. Here are two example PCA plots using the PC scores we already generated and saved to our data frame earlier in this file. The process would be the same for LD scores. There are plenty of ggplot tutorials/cheat sheets available online to help you make necessary formatting tweaks.
+
+```{r}
+#set custom color schemes
+#a lot of publication plots need to be B&W for print, and ggplot lets you customize various greys
+m <- c("grey60", "black")
+
+x$Subspecies <- as.factor(x$Subspecies)
+levels(x$Subspecies) <- c("P. l. continentis", "P. l. lowii")
+
+#to overlay polygons, you need to use the following function
+find_hull <- function(x) x[chull(x$pc1, x$pc2), ]
+hulls <- plyr::ddply(x, "Subspecies", find_hull)
+
+#basic subspecies plot
+plot <- ggplot(data = x, aes(x=pc1, y=pc2, group=Subspecies)) + #base for the plot
+  geom_point(aes(shape=Subspecies), size=3) + #add points and vary shape based on Subspecies
+  scale_shape_manual(values = c(16,17), #set manual shape scale and legend
+                     guide = 
+                       guide_legend(label.theme = 
+                                      element_text(angle = 0,
+                                                   face = "italic",
+                                                   size=14))) + 
+  geom_vline(aes(xintercept = 0), size=0.25) + #y axis
+  geom_hline(aes(yintercept = 0), size=0.25) + #x axis
+  scale_linetype_manual(values=c("solid","dashed")) + #vary polygon outlines manually
+  theme_bw() + #blank theme 
+  xlab("PC1 (51.73%)") + #x axis label, variance explained by PC1
+  ylab("PC2 (18.18%)") + #y axis label, variance explained by PC2
+  theme(panel.grid.major = element_blank(), #dump gridlines
+        panel.grid.minor = element_blank()) + 
+  scale_fill_manual(values=m) + #set polygon colors
+  geom_polygon(data=hulls, #add polygons, vary fill and linetype by subspecies
+               alpha=0.3, 
+               aes(x=pc1, 
+                   y=pc2, 
+                   group=Subspecies, 
+                   fill=Subspecies, 
+                   linetype=Subspecies), 
+               colour="black") +
+  theme(legend.position = c(0.79, 0.11), #legend formatting
+        legend.title = element_blank(),
+        legend.spacing.x = unit(2.5, 'mm'), 
+        legend.key.size = unit(6, 'mm'),
+        text = element_text(size=13)) + 
+  ylim(-3,3) + #y axis bounds
+  xlim(-3.5,5) #x axis bounds
+
+#view plot
+plot
+
+#save plot (note that proportions may change when file is saved, and code should be tweaked accordingly)
+#ggsave(plot,file="plot.png",width=120, height=120, units="mm")
+
+#if we wanted to make a plot by region (island) and add manual labels for subspecies, here is what we'd do:
+
+#to overlay polygons, you need to use the following function
+find_hull <- function(x) x[chull(x$pc1, x$pc2), ]
+hulls2 <- plyr::ddply(x, "Region", find_hull)
+
+n <- c("black", "grey80", "grey60", "white")
+
+#basic subspecies plot
+plot2 <- ggplot(data = x, aes(x=pc1, y=pc2, group=Region)) + #base for the plot
+  geom_point(aes(shape=Region), size=3) + #add points and vary shape based on Subspecies
+  scale_shape_manual(values = c(17,21,8,15)) + #set manual shape scale and legend 
+  geom_vline(aes(xintercept = 0), size=0.25) + #y axis
+  geom_hline(aes(yintercept = 0), size=0.25) + #x axis
+  scale_linetype_manual(values=c("solid","dashed","blank","dotted")) + #vary polygon outlines manually
+  theme_bw() + #blank theme 
+  xlab("PC1 (51.73%)") + #x axis label, variance explained by PC1
+  ylab("PC2 (18.18%)") + #y axis label, variance explained by PC2
+  theme(panel.grid.major = element_blank(), #dump gridlines
+        panel.grid.minor = element_blank()) + 
+  scale_fill_manual(values=n) + #set polygon colors
+  geom_polygon(data=hulls2, #add polygons, vary fill and linetype by subspecies
+               alpha=0.3, 
+               aes(x=pc1, 
+                   y=pc2, 
+                   group=Region, 
+                   fill=Region, 
+                   linetype=Region), 
+               colour="black") +
+  theme(legend.position = c(0.84, 0.16), #legend formatting
+        legend.title = element_blank(),
+        legend.spacing.x = unit(2.5, 'mm'), 
+        legend.key.size = unit(6, 'mm'),
+        text = element_text(size=13)) + 
+  ylim(-3.5,3) + #y axis bounds
+  xlim(-3.5,5) + #x axis bounds
+  geom_text(label="P. l. lowii", #add subspecies labels
+            x=1, y=-0.9, size = 4.5, 
+            color = "black", fontface = "italic") +
+  geom_text(label="P. l. continentis", #add subspecies labels
+            x=1, y=1.5, size = 4.5, 
+            color = "black", fontface = "italic")
+
+#view plot
+plot2
+
+#use following line to view two plots side by side 
+#this will squish proportions and require tweaks, i like to save each part separately then combine later in illustrator or whatever
+grid.arrange(plot,plot2,ncol=2)
+
+#making tiny formatting tweaks can be super annoying in R. you can always deal with legend, labeling in another program (illustrator, photoshop, etc)
+```
+
