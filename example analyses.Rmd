@@ -196,7 +196,9 @@ title(main = "PC1 vs. Latitude")
 
 ###Discriminant function analysis
 
-Unlike PCA, which is more conservative, Discriminant Function Analysis (DFA) is another multivariate approach that is actively trying to classify groups in your sample. DFA will essentially try to accurately sort your sample into categories based on the data you provide (for e.g., subspecies, islands, sexes). The higher the correct classification rate, the more distinct these groups are based on the data you have. You can also use DFA to try to predict the classification of "unknowns" in your sample. 
+Unlike PCA, which is more conservative, Discriminant Function Analysis (DFA) is another multivariate approach that is actively trying to classify groups in your sample. DFA will essentially try to accurately sort your sample into categories based on the data you provide (for e.g., subspecies, islands, sexes). The higher the correct classification rate, the more distinct these groups are based on the data you have. You can also use DFA to try to predict the classification of "unknowns" in your sample.
+
+DFA is sometimes referred to as Linear Discriminant Analysis (LDA), which is why we will be using the lda() function from the MASS package.
 
 Let's dive in:
 
