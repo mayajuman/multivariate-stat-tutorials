@@ -29,7 +29,7 @@ data[,8:25] <- log(data[,8:25])
 
 ###Sexual Dimorphism
 
-For any analyses that involve size, you might want to check whether there is significant sexual size dimorphism in your sample. There are a few ways to do this, but the simplest one is to run a univariate t-test on a measurement that makes sense; in this case, CPL (condylopremaxillary length) is appropriate, as it is basically a measure of skull length (/size).
+For any analyses that involve size, you might want to first check whether there is significant sexual size dimorphism in your sample. There are a few ways to do this, but the simplest one is to run a univariate t-test on a measurement that makes sense; in this case, CPL (condylopremaxillary length) is appropriate, as it is basically a measure of skull length (/size).
 
 ```{r}
 #you can replace CPL with any variable here
@@ -42,7 +42,7 @@ Moving on!
 
 ###Dealing with missing data
 
-A morphometric dataset is likely to have a pretty substantial amount of missing data (damaged specimens, etc). But the multivariate methods described below can't handle missing data. This is a problem! But there are a few ways we can deal with it. The first is to impute measurements based on the other data (see Clavel et al. 2014, https://doi.org/10.1093/sysbio/syt100 for imputation functions). This makes sense for certain kinds of studies (i.e. Juman et al. 2022, imputation code here: https://github.com/mayajuman/belangeri) more than others. For taxonomy-focused morphometrics, it's probably best to avoid imputation. The other option is to remove variables/individuals strategically, to produce a smaller but complete dataset that hopefully optimizes any subsets that we are most interested in studying. 
+A morphometric dataset is likely to have a pretty substantial amount of missing data (damaged specimens, etc). But the multivariate methods described below can't handle missing data. This is a problem! But there are a few ways we can deal with it. The first is to impute measurements based on the other data we have (see Clavel et al. 2014, https://doi.org/10.1093/sysbio/syt100 for imputation functions). This makes sense for certain kinds of studies (i.e. Sargis et al. 2018; Juman et al. 2022, imputation code here: https://github.com/mayajuman/belangeri) more than others. For taxonomy-focused morphometrics, it's probably best to avoid imputation. The other option is to remove variables/individuals strategically, to produce a smaller but complete dataset that hopefully optimizes any subsets that we are most interested in studying. 
 
 Let's start by checking how much missing data we have:
 
@@ -78,7 +78,7 @@ This means that we really don't want to lose any of those 8. So let's cut any me
 colSums(is.na(x[which(x$Subspecies == "lowii"),])) #CPL, MB, CNL, PBPL, MCW have NAs
 x <- x %>% select(-CPL, -MB, -CNL, -PBPL, -MCW) 
 
-colSums(is.na(x[which(x$Subspecies == "lowii"),])) #check to make sure we have a complete sample for these 8 -- success!
+#colSums(is.na(x[which(x$Subspecies == "lowii"),])) #check to make sure we have a complete sample for these 8 -- success!
 ```
 
 We know we're going to lose some *P. l. continentis* individuals, but we can also afford to cut another couple variables. This requires some careful finetuning:
@@ -97,7 +97,7 @@ x <- x %>% select(-LPL, -LTL) %>% drop_na(BB, PPL)
 
 We now have a complete sample of eight measurements for 40 specimens. We only lost five individuals, and from the subset (*P. l. continentis*) that is better represented in our dataset anyway. We're ready for multivariate analyses!
 
-Note: for a small dataset like this one, I would recommend going through it manually like we just did, which allows you to finetune and optimize any smaller samples within your dataset (i.e. subspecies, sex, localities, etc -- any groups you particularly care about and don't want to lose any individuals from). For larger datasets, this will be inefficient. Below are some lines of code that might help you more quickly cut down large samples to eliminate missing data:
+Note: for a small dataset like this one, I would recommend going through it manually like we just did, which allows you to finetune and optimize any smaller samples within your dataset (i.e. subspecies, sex, localities, etc -- any groups you particularly care about and don't want to lose any individuals from). For larger datasets, this will be inefficient. Below is some code that might help you more quickly cut down large samples to eliminate missing data:
 
 ```{r}
 #the following line removes any columns that have n or or more NAs (so replace n with whatever you see as a maximum acceptable number of lost individuals for your dataset)
@@ -132,7 +132,7 @@ optimize <- function(data, name, a, b) {
 
 ###Principal Component Analysis (PCA)
 
-Principal component analysis (PCA) is a data reduction method that is used to consolidate large amounts in information in multivariate datasets by distilling these data into only a few dimensions ("principal components", or PCs). In our case, we want to take the 8 complete measurements in our pared-down dataset, which include length, width, and height variables, and transform them into PCs that capture size/shape so that we can visualize variation between individuals along these axes (plotted in "morphospace"). There are several packages that you can use to do this, but let's start simple here:
+Principal component analysis (PCA) is a data reduction method that is used to consolidate large amounts of information in multivariate datasets by distilling these data into only a few dimensions ("principal components", or PCs). In our case, we want to take the 8 complete measurements in our pared-down dataset, which include length, width, and height variables, and transform them into PCs that capture size/shape so that we can visualize variation between individuals along a few axes (plotted in "morphospace"). There are several packages that you can use to do this, but let's start simple here:
 
 ```{r}
 #run the PCA
@@ -149,9 +149,9 @@ print(pca[["loadings"]], cutoff=0) #loadings
 round(pca$sdev^2,2) #eigenvalues (i.e. squared standard dv)
 ```
 
-What have we learned so far? The "proportion of variance" tells us that the first component (PC1) represents 51.7% of the variance in our sample, while PC2 represents 18%. So a bivariate plot of these two PCs would capture almost 70% of the variance in our sample: not bad. Additional components represent smaller proportions of variance. The loadings for each component are also revealing. 
+What have we learned so far? The "proportion of variance" tells us that the first component (PC1) represents 51.7% of the variance in our sample, while PC2 represents 18%. So a bivariate plot of these two PCs would capture almost 70% of the variance in our sample: not bad. Additional components represent smaller proportions of variance. 
 
-For PC1, the most heavily weighted components are UTL, MCIL, MTL, and PPL -- all length variables. That suggests that PC1, which accounts for over half the variance, is likely representing skull length. PC2 has a high positive loading for BB (braincase breadth) and relatively high negative loadings for MH and MCH, both of which represent mandibular height. This suggest that PC2 is a shape variable capturing a contrast between cranium width and mandible height. The PCA has compressed information from eight variables into a few simpler axes.
+The loadings for each component are also revealing. For PC1, the most heavily weighted variables are UTL, MCIL, MTL, and PPL -- all length variables. That suggests that PC1, which accounts for over half the variance, is likely representing skull length. PC2 has a high positive loading for BB (braincase breadth) and relatively high negative loadings for MH and MCH, both of which represent mandibular height. This suggest that PC2 is a shape variable capturing a contrast between cranium width and mandible height. The PCA has compressed information from eight variables into a few simpler axes.
 
 Each individual has been assigned "scores" for each principal component, which can be used to plot and understand variation among individuals. Let's quickly visualize the PC scores with a readymade function from ggfortify(), an extension to the ggplot2() package. We can label our points in a variety of ways depending on what we are interested in looking at.
 
@@ -167,11 +167,11 @@ pca$scores[,2]
 autoplot(pca, x = 1, y = 2, data = x, colour = 'Subspecies', label = FALSE, size = 2.5, label.size = 3, frame=TRUE) + ggtitle("PCA by Subspecies")
 
 #include a shape variable as well
-autoplot(pca, x = 1, y = 2, data = x, colour = 'Subspecies', shape = 'Sex', label = FALSE, size = 2.5, label.size = 3, frame=TRUE) + ggtitle("PCA by Subspecies")
+autoplot(pca, x = 1, y = 2, data = x, colour = 'Subspecies', shape = 'Sex', label = FALSE, size = 2.5, label.size = 3, frame=TRUE) + ggtitle("PCA by Subspecies and Sex")
 
 autoplot(pca, x = 1, y = 2, data = x, colour = 'Region', label = FALSE, size = 2.5, label.size = 3, frame=TRUE) + ggtitle("PCA by Region")
 
-autoplot(pca, x = 1, y = 2, data = x, colour = 'Sex', label = FALSE, size = 2.5, label.size = 3, frame=TRUE) + ggtitle("PCA by Subspecies")
+autoplot(pca, x = 1, y = 2, data = x, colour = 'Sex', label = FALSE, size = 2.5, label.size = 3, frame=TRUE) + ggtitle("PCA by Sex")
 ```
 
 What can we conclude from these plots? There is a lot of overlap between subspecies, though some separation along PC2. To interpret that, we refer back to the loadings. It seems like *P. l. lowii* has lower scores on PC2 relative to *P. l. continentis*, suggesting that its braincase may be less wide relative to its mandibular height. You may or may not be able to interpret much from the loadings in terms of functional anatomy, but the PCA allows us to examine variation in our sample, which is the main goal. There does seem to be some separation along PC2 between mainland and Mentawai island specimens, though this sample is quite small. And finally, the overlap in the PCA by sex confirms the apparent lack of sexual size dimorphism in our dataset.
@@ -196,7 +196,7 @@ title(main = "PC1 vs. Latitude")
 
 ###Discriminant function analysis
 
-Unlike PCA, which is more conservative, Discriminant Function Analysis (DFA) is another multivariate approach that is actively trying to classify groups in your sample. DFA will essentially try to accurately sort your sample into the correct categories based on the data you provide (for e.g., subspecies, islands, sexes). The higher the correct classification rate, the more distinct these groups are based on the data you have. You can also use DFA to try to predict the classification of "unknowns" in your sample. 
+Unlike PCA, which is more conservative, Discriminant Function Analysis (DFA) is another multivariate approach that is actively trying to classify groups in your sample. DFA will essentially try to accurately sort your sample into categories based on the data you provide (for e.g., subspecies, islands, sexes). The higher the correct classification rate, the more distinct these groups are based on the data you have. You can also use DFA to try to predict the classification of "unknowns" in your sample. 
 
 Let's dive in:
 
@@ -211,7 +211,7 @@ ctraw #rows are actual count and columns are predicted count
 round(sum(diag(prop.table(ctraw))),4)*100
 ```
 
-The rows in this table represent the actual groups, and the columns are the groups that the DFA sorted the individuals into. The overall correct classification rate was 90% -- pretty high! Remember that these are the same groups that the PCA showed as largely overlapping. The DFA, which is *trying* to split them, suggests that they are more distinct than the PCA showed.
+The rows in this table represent the actual groups, and the columns are the groups that the DFA sorted the individuals into. The overall correct classification rate was 90% -- pretty high! Remember that these are the same groups that mostly overlapped in the PCA. The DFA, which is *trying* to split them, suggests that they are more distinct than the PCA showed.
 
 Now let's try a jackknife procedure (i.e. leave-one-out cross validation) on a second DFA and see if this classification rate stays high. This is a good way to see how robust your result is, and I tend to report the cross-validated DFA:
 
@@ -233,10 +233,10 @@ Another thing you can do with a DFA is predict the classification of "unknowns".
 ```{r}
 #the first thing you need to do is divide your dataset into the training set (known groups) and the test set (the unknowns that you want to predict)
 
-#here i'm creating the training set, either by selecting the known groups OR removing the unknowns (either line works)
+#here i'm creating the training set by selecting the known groups
 x2 <- x[which(x$Region == "Borneo" | x$Region == "Malay Peninsula"),]
 
-#here i'm creating the test set by selecting the unknowns
+#here i'm creating the test set by selecting the unknowns (i.e. everything that isn't a known group)
 u <- x[-which(x$Region == "Borneo" | x$Region == "Malay Peninsula"),]
 
 #DFA (WITHOUT CROSS VALIDATION)
@@ -260,7 +260,7 @@ predict(lin, u[,8:15])$class
 #all three island specimens were classified as Malay Peninsula
 
 #NOTE: you cannot predict using a cross-validated model
-#however, you can cross-validate the prediction itself (with the not-cross validated model), like below:
+#however, you can cross-validate the prediction itself (with the not-cross validated model), like so:
 predict(lin, CV=TRUE, u[,8:15])$class
 #still Malay Peninsula for all three
 ```
@@ -284,6 +284,7 @@ We've gone over how to make relatively simple plots with built-in functions, but
 #a lot of publication plots need to be B&W for print, and ggplot lets you customize various greys
 m <- c("grey60", "black")
 
+#renaming subspecies categories to include the genus and species for the legend
 x$Subspecies <- as.factor(x$Subspecies)
 levels(x$Subspecies) <- c("P. l. continentis", "P. l. lowii")
 
@@ -293,7 +294,7 @@ hulls <- plyr::ddply(x, "Subspecies", find_hull)
 
 #basic subspecies plot
 plot <- ggplot(data = x, aes(x=pc1, y=pc2, group=Subspecies)) + #base for the plot
-  geom_point(aes(shape=Subspecies), size=3) + #add points and vary shape based on Subspecies
+  geom_point(aes(shape=Subspecies), size=3) + #add points and vary shape based on subspecies
   scale_shape_manual(values = c(16,17), #set manual shape scale and legend
                      guide = 
                        guide_legend(label.theme = 
