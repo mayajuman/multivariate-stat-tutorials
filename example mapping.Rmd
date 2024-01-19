@@ -31,6 +31,12 @@ loc$Subspecies <- as.factor(loc$Subspecies)
 levels(loc$Subspecies) <- c("P. l. continentis", "P. l. lowii")
 
 #load ESRI shp data (IUCN range)
+#citation:
+  ## Cassola F (2016) Ptilocercus lowii. 
+  ## The IUCN Red List of Threatened Species 2016: e.T41491A22278277. 
+  ## https://doi.org/10.2305/ IUCN.UK.2016-2.RLTS.T41491A22278277.en. 
+  ## Downloaded on 23 January 2021
+
 spdf <- readOGR(dsn = "~/Documents/treeshrews/multivariate-stat-tutorials/IUCN range files", layer = "data_0")
 shp_df <- fortify(spdf)
 
